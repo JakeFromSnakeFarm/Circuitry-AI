@@ -80,17 +80,19 @@ img {
     <script>
     var solution = [],
         pieces = [],
+        toVisitPieces = [],
         power = false,
         interval, fails,
         index1 = 0,
         index2 = 0,
-        paused = false;
+        paused = false,
+        intervalSpeed = 700;
 
     function Piece(i, j, id) { //Object constructor function
         this.trueRot = 0; //Var for mathematical 0-360
         this.cssRot = 90; //Var for CSS rotation that >360
         this.id = id; //Stores non matrix ID
-        this.index = { i, j }; //Stores own index value
+        this.index = { i, j, id }; //Stores own index value
         this.src = null; //Serves as tile type
         this.connections = []; //0-3 correspond to up,down,left,right respective
         this.hasUp = false; //Bools used to determine random direction
@@ -98,10 +100,9 @@ img {
         this.hasLeft = false;
         this.hasRight = false;
         this.isSetTile = false;
+        this.wasSpliced = false;
         //this.connected = false;
         this.tick = function() {
-            $(".crossRotate").css("background-color","#2196F3")
-            $("#"+this.id).css("background-color","green")
             if (!this.isSetTile && this.checkCons()) { //Tiles has to be unset and have <3 connections
                 this.freeRandomDir();
                 fails = 0; //Fails var for ending loop
@@ -112,7 +113,7 @@ img {
             } else {
                 if (fails++ == 25) { //If 25 objects come back unedited, declare the loop over
                     clearInterval(interval);
-                    $(".crossRotate").css("background-color","#2196F3")
+                    $(".crossRotate").css("background-color", "#2196F3")
                     vectorToSolutionArray();
                 }
                 this.setSrc(); //Set the png for every finished tile
@@ -121,11 +122,59 @@ img {
         };
         this.checkCons = function() {
             if (this.connections.length >= 3 || this.connections.length == 0) {
+                if (this.connections.length >= 3) {
+                    this.tileSet();
+                }
                 return false;
             }
             return true;
         };
         this.freeRandomDir = function() {
+            let excluded = [],
+                neighbors;
+            neighbors = this.grabExclusions();
+            excluded = neighbors.excluded;
+            if (excluded.length < 4) { //If all 4 directions arent blocks, then:
+                this.connections[this.connections.length] = random(0, 3, excluded); //Reference homebrew random function
+                switch (this.connections[this.connections.length - 1]) { //Switch statement for each direction
+                    case 0:
+                        this.hasUp = true; //Change boolen if this random direction is selected
+                        neighbors.pieceUp.connections[neighbors.pieceUp.connections.length] = 1; //Assign the respective neighbor the opposite direction
+                        neighbors.pieceUp.hasDown = true; //Assing boolean to neighbor as well, otherwise we get repetition in direction
+                        neighbors.pieceUp.setSrc("holder")
+                        neighbors.pieceUp.selfRotate(neighbors.pieceUp.calcSolution())
+                        toVisitPieces[toVisitPieces.length] = neighbors.pieceUp.index;
+                        break;
+                    case 1:
+                        this.hasDown = true;
+                        neighbors.pieceDown.connections[neighbors.pieceDown.connections.length] = 0;
+                        neighbors.pieceDown.hasUp = true;
+                        neighbors.pieceDown.setSrc("holder")
+                        neighbors.pieceDown.selfRotate(neighbors.pieceDown.calcSolution())
+                        toVisitPieces[toVisitPieces.length] = neighbors.pieceDown.index;
+                        break;
+                    case 2:
+                        this.hasLeft = true;
+                        neighbors.pieceLeft.connections[neighbors.pieceLeft.connections.length] = 3;
+                        neighbors.pieceLeft.hasRight = true;
+                        neighbors.pieceLeft.setSrc("holder")
+                        neighbors.pieceLeft.selfRotate(neighbors.pieceLeft.calcSolution())
+                        toVisitPieces[toVisitPieces.length] = neighbors.pieceLeft.index;
+                        break;
+                    case 3:
+                        this.hasRight = true;
+                        neighbors.pieceRight.connections[neighbors.pieceRight.connections.length] = 2;
+                        neighbors.pieceRight.hasLeft = true;
+                        neighbors.pieceRight.setSrc("holder")
+                        neighbors.pieceRight.selfRotate(neighbors.pieceRight.calcSolution())
+                        toVisitPieces[toVisitPieces.length] = neighbors.pieceRight.index;
+                        break;
+                }
+            } else {
+                this.tileSet(); //If all neighbors are invalid, quit doing ticks
+            }
+        };
+        this.grabExclusions = function() {
             let excluded = [],
                 pieceUp, pieceDown, pieceLeft, pieceRight;
             try {
@@ -153,7 +202,7 @@ img {
                     excluded[i] = this.connections[i];
                 }
             }
-            if (pieceUp == null || pieceUp.connections.length >= 1) { //If the neighbor is a wall (null) or exists, dont connecct to him
+            if (pieceUp == null || pieceUp.connections.length >= 1) { //If the neighbor is a wall (null) or exists, dont connect to him
                 if (!this.hasUp) //If there is an up connection, dont add another 0 to the array
                     excluded[excluded.length] = 0;
             }
@@ -169,44 +218,10 @@ img {
                 if (!this.hasRight)
                     excluded[excluded.length] = 3;
             }
-            if (excluded.length < 4) { //If all 4 directions are blocks, then:
-                this.connections[this.connections.length] = random(0, 3, excluded); //Reference homebrew random function
-                switch (this.connections[this.connections.length - 1]) { //Switch statement for each direction
-                    case 0:
-                        this.hasUp = true; //Change boolen if this random direction is selected
-                        pieceUp.connections[pieceUp.connections.length] = 1; //Assign the respective neighbor the opposite direction
-                        pieceUp.hasDown = true; //Assing boolean to neighbor as well, otherwise we get repetition in direction
-                        pieceUp.setSrc("holder")
-                        pieceUp.selfRotate(pieceUp.calcSolution())
-                        break; //Maybe I should make a function to auto update these boolean every tick :)
-                    case 1:
-                        this.hasDown = true;
-                        pieceDown.connections[pieceDown.connections.length] = 0;
-                        pieceDown.hasUp = true;
-                        pieceDown.setSrc("holder")
-                        pieceDown.selfRotate(pieceDown.calcSolution())
-                        break;
-                    case 2:
-                        this.hasLeft = true;
-                        pieceLeft.connections[pieceLeft.connections.length] = 3;
-                        pieceLeft.hasRight = true;
-                        pieceLeft.setSrc("holder")
-                        pieceLeft.selfRotate(pieceLeft.calcSolution())
-                        break;
-                    case 3:
-                        this.hasRight = true;
-                        pieceRight.connections[pieceRight.connections.length] = 2;
-                        pieceRight.hasLeft = true;
-                        pieceRight.setSrc("holder")
-                        pieceRight.selfRotate(pieceRight.calcSolution())
-                        break;
-                }
-            } else {
-                this.isSetTile = true; //If all neighbors are invalid, quit doing ticks
-            }
-        };
+            return { excluded, pieceUp, pieceDown, pieceLeft, pieceRight };
+        }
         this.setSrc = function(forceSrc) {
-            if(!forceSrc) {
+            if (!forceSrc) {
                 switch (this.connections.length) {
                     case 1:
                         this.src = "node"; //1 connections means is a node
@@ -235,7 +250,7 @@ img {
             document.getElementById(this.id + "").src = "./tiles/" + this.src + ".png";
         };
         this.calcSolution = function() {
-            if (this.src == "node" || this.src == "straight" || this.src=="holder") {
+            if (this.src == "node" || this.src == "straight" || this.src == "holder") {
                 switch (this.connections[this.connections.length - 1]) {
                     case 0:
                         return 0;
@@ -273,14 +288,21 @@ img {
             }
         };
         this.selfRotate = function(angle) {
-            $("#"+this.id).css("transform","rotate("+angle+"deg)")
+            $("#" + this.id).css("transform", "rotate(" + angle + "deg)")
+        }
+        this.tileSet = function() {
+            if (!this.wasSpliced) {
+                splicePiece(this.index);
+                this.isSetTile = true;
+                this.setSrc();
+            }
         }
     }
 
     function init() {
         $(".crossRotate").css("transform", "rotate(0deg)"); //Resets rotation. Plans to make a random rotation later
-         $(".crossRotate").attr("src","./tiles/null.png");
-         clearInterval(interval)
+        $(".crossRotate").attr("src", "./tiles/null.png");
+        clearInterval(interval)
         for (let i = 5; i--;) { //Initialize 2d array
             pieces[i] = [];
         }
@@ -291,39 +313,37 @@ img {
         }
         if (!power) {
             pieces[2][2].freeRandomDir(); //Start tree
-             pieces[2][2].setSrc();
+            pieces[2][2].freeRandomDir();
+            pieces[2][2].freeRandomDir(); //3 times to ensure it has 3 connections
+            pieces[2][2].setSrc();
+            pieces[2][2].connections.sort(function(a, b) { return a - b });
+            pieces[2][2].selfRotate(pieces[2][2].calcSolution());
         }
-        interval = setInterval(generatePuzzle, 500); //Function timer
+        interval = setInterval(generatePuzzle, intervalSpeed); //Function timer
+        intervalCons = setInterval(conditionsInterval, 50)
     }
 
     function generatePuzzle() {
-        if (checkMatrix)
-           // for (let i = 0; i < pieces.length; i++) {
-                //for (let j = 0; j < pieces[i].length; j++) {
-                    console.log("tick")
-                    if(index2==5){
-                        index1++;
-                        index2=0;
-                    }
-                    if(index1==5) {
-                        index1=0;
-                        index2=0;
-                    }
-                    pieces[index1][index2++].tick();
-                //}
-           // }
+        $(".crossRotate").css("background-color", "#2196F3");
+        if (toVisitPieces.length != 0) {
+            let index = toVisitPieces[random(0, toVisitPieces.length - 1)]
+            pieces[index.i][index.j].tick()
+        }
     }
 
-    function checkMatrix() {
+    function conditionsInterval() {
+        for (let i = 0; i < toVisitPieces.length; i++) {
+            $("#" + toVisitPieces[i].id).css("background-color", "#63db65");
+        }
         for (let i = 0; i < pieces.length; i++) {
             for (let j = 0; j < pieces[i].length; j++) {
-                pieces[i][j].selfRotate(pieces[i][j].calcSolution())
-                if (pieces[i][j].connections.length == 0) {
-                    return true;
+                pieces[i][j].checkCons();
+                let x = pieces[i][j].grabExclusions()
+                if (x.excluded.length == 4) {
+                    pieces[i][j].tileSet();
                 }
             }
         }
-        return false;
     }
 
     function findIndex(id) {
@@ -365,15 +385,26 @@ img {
         }
     }
 
+    function splicePiece(index) {
+        for (let i = 0; i < toVisitPieces.length; i++) {
+            if (toVisitPieces[i] == index) {
+                console.log("Spliced at " + index.i + " " + index.j)
+                $("#" + index.id).css("background-color", "#2196F3")
+                toVisitPieces.splice(i, 1)
+                break;
+            }
+        }
+    }
+
     function pauseUnpause(button) {
         paused = !paused
         if (paused) {
             clearInterval(interval)
             button.innerHTML = "Unpause"
         } else {
-            interval = setInterval(generatePuzzle, 500);
+            interval = setInterval(generatePuzzle, intervalSpeed);
             button.innerHTML = "Pause"
-    }
+        }
     }
 
     function random(min, max, occlusion) { //Homebrew random function for generating random numbers, occlusion is an array that holds #s our random cant be
